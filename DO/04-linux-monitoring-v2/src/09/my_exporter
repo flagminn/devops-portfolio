@@ -1,0 +1,20 @@
+#!/bin/bash
+while true; do
+  CPU=$(top -bn1 | grep "Cpu(s)" | awk '{printf "%.2f", $2 + $4}')
+  MEM=$(free -m | awk '/Mem:/ {print $4}')
+  # Очищаем вывод df от всего лишнего
+  DISK=$(df / | awk 'NR==2 {printf "%.2f", $3/1024/1024}')
+
+  cat <<EOF > /var/www/html/metrics
+# HELP my_cpu_usage CPU usage in percent
+# TYPE my_cpu_usage gauge
+new_my_cpu_usage $CPU
+# HELP my_mem_free Free memory in MB
+# TYPE my_mem_free gauge
+new_my_mem_free $MEM
+# HELP my_disk_used Disk space used in GB
+# TYPE my_disk_used gauge
+new_my_disk_used $DISK
+EOF
+  sleep 3
+done

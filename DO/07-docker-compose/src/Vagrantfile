@@ -1,0 +1,52 @@
+Vagrant.configure("2") do |config|
+  config.vm.box = "ubuntu/jammy64"
+
+
+  config.vm.provider "virtualbox" do |vb|
+    vb.gui = false
+    
+    vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
+  end
+
+ 
+  config.vm.define "manager01" do |m|
+    m.vm.network "private_network", ip: "192.168.56.10"
+
+    m.vm.network "forwarded_port", guest: 8081, host: 8081
+    m.vm.network "forwarded_port", guest: 8087, host: 8087
+
+    m.vm.hostname = "manager01"
+
+    m.vm.provision "shell", path: "install_docker.sh"
+    m.vm.provider "virtualbox" do |vb|
+      vb.memory = "2048"
+      vb.cpus = 2
+    end
+  end
+
+
+  config.vm.define "worker01" do |w1|
+    w1.vm.network "private_network", ip: "192.168.56.11"
+
+    w1.vm.hostname = "worker01"
+
+    w1.vm.provision "shell", path: "install_docker.sh"
+    w1.vm.provider "virtualbox" do |vb|
+      vb.memory = "1536"
+      vb.cpus = 1
+    end
+  end
+
+
+  config.vm.define "worker02" do |w2|
+    w2.vm.network "private_network", ip: "192.168.56.12"
+
+    w2.vm.hostname = "worker02"
+
+    w2.vm.provision "shell", path: "install_docker.sh"
+    w2.vm.provider "virtualbox" do |vb|
+      vb.memory = "1536"
+      vb.cpus = 1
+    end
+  end
+end

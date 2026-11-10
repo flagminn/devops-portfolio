@@ -1,0 +1,4 @@
+#!bin/bash
+
+sudo mkdir -p /var/www/html/
+sudo chown -R $USER:$USER /var/www/html/

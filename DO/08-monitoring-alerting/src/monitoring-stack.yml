@@ -1,0 +1,122 @@
+version: '3.8'
+
+
+configs:
+  prom_config:
+    file: ./prometheus.yml 
+  loki_config:
+    file: ./loki_config.yml
+  prom_rules: 
+    file: ./alert.rules.yml
+  alertmanager_config: 
+    file: ./alertmanager.yml
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.45.0  
+    networks:
+      - swarm_network  
+    ports:
+      - "9090:9090"  
+    configs:
+      - source: prom_config 
+        target: /etc/prometheus/prometheus.yml  
+      - source: prom_rules 
+        target: /etc/prometheus/alert.rules.yml
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager 
+    
+
+  grafana:
+    image: grafana/grafana:10.2.3
+    networks:
+      - swarm_network
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_storage:/var/lib/grafana
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+
+  loki:
+    image: grafana/loki:latest
+    networks: 
+      - swarm_network
+    ports:
+      - "3100:3100"
+    configs:
+      - source: loki_config
+        target: /etc/loki/loki.yaml
+        uid: '10001' 
+        gid: '10001'
+        mode: 0444 
+    
+  node_exporter:
+    image: prom/node-exporter:v1.6.1 
+    networks:
+      - swarm_network
+    volumes:
+     
+      - /:/host:ro,rslave
+    command:
+      
+      - '--path.rootfs=/host'
+    deploy:
+      mode: global 
+
+  blackbox_exporter:
+    image: prom/blackbox-exporter:v0.24.0 
+    networks:
+      - swarm_network
+    deploy:
+      mode: replicated
+      replicas: 1 
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.2 
+    networks:
+      - swarm_network
+    volumes:
+     
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      
+      - /sys:/sys:ro
+      
+      - /var/lib/docker/:/var/lib/docker:ro
+    deploy:
+      mode: global 
+  alertmanager:
+    image: prom/alertmanager:v0.25.0
+    networks:
+      - swarm_network
+    ports:
+      - "9093:9093"
+    configs:
+      - source: alertmanager_config
+        target: /etc/alertmanager/alertmanager.yml
+    command: --config.file=/etc/alertmanager/alertmanager.yml
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+
+
+networks:
+  swarm_network:
+    name: app_swarm_network
+    external: true  
+
+volumes:
+  grafana_storage:
+

@@ -1,0 +1,18 @@
+services:
+  server:
+    build: .
+    container_name: server
+    expose:
+      - "8080"
+    restart: always
+
+  proxy:
+    image: nginx:latest
+    container_name: proxy
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/proxy.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - server
+    restart: always

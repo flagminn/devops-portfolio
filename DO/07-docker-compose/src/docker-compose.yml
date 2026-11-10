@@ -1,0 +1,210 @@
+x-pg-db: &pg-db
+    POSTGRES_HOST: db
+    POSTGRES_PORT: 5432
+    POSTGRES_USER: postgres
+    POSTGRES_PASSWORD: postgres
+
+x-rab: &rab
+    RABBIT_MQ_PORT: 5672
+    RABBIT_MQ_USER: guest
+    RABBIT_MQ_PASSWORD: guest
+    RABBIT_MQ_QUEUE_NAME: messagequeue
+    RABBIT_MQ_EXCHANGE: messagequeue-exchange
+    RABBIT_MQ_HOST: rabbitmq
+
+x-swarm-deploy: &swarm-deploy
+    deploy:
+        restart_policy:
+            condition: on-failure
+services:
+    nginx:
+        image: nginx:alpine
+        configs:
+            - source: nginx_config
+              target: /etc/nginx/nginx.conf
+        ports: 
+            - "80:80"
+            - "8081:8081"
+            - "8087:8087"
+        # restart: always
+        networks:
+            - swarm_network
+        # depends_on:
+        #     - gateway
+        #     - session
+        deploy:
+            placement:
+                constraints:
+                    - node.role == manager
+            restart_policy:
+                condition: any
+        
+        
+    db:
+        image: "postgres:15.1-alpine"
+        volumes:
+            - shop_db:/var/lib/postgresql/data
+    
+            
+        configs:
+            - source: db_config
+              target: /docker-entrypoint-initdb.d/init.sql
+        environment:
+            POSTGRES_USER: postgres
+            POSTGRES_PASSWORD: postgres
+
+        networks:
+            - swarm_network
+        # healthcheck:
+        #     test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+        #     interval: 10s
+        #     timeout: 5s
+        #     retries: 8
+        #     start_period: 20s
+        <<: *swarm-deploy
+    rabbitmq:
+        image: rabbitmq:3-management-alpine
+        environment:
+            RABBITMQ_DEFAULT_USER: guest
+            RABBITMQ_DEFAULT_PASS: guest
+        networks:
+            - swarm_network
+        # healthcheck:
+        #     test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping"]
+        #     interval: 10s
+        #     timeout: 5s
+        #     retries: 8
+        #     start_period: 20s
+        <<: *swarm-deploy
+    booking:
+        image: flagminn/booking:latest
+        environment:
+            <<: [*pg-db, *rab]
+            POSTGRES_DB: reservations_db
+            HOTEL_SERVICE_HOST: hotel
+            HOTEL_SERVICE_PORT: 8082
+            PAYMENT_SERVICE_HOST: payment
+            PAYMENT_SERVICE_PORT: 8084
+            LOYALTY_SERVICE_HOST: loyalty
+            LOYALTY_SERVICE_PORT: 8085
+
+        networks:
+            - swarm_network
+        # depends_on:
+        #     db:
+        #         condition: service_healthy
+        #     rabbitmq:
+        #         condition: service_healthy
+        <<: *swarm-deploy
+    gateway:
+        image: flagminn/gateway:latest
+        environment:
+            SESSION_SERVICE_HOST: session
+            SESSION_SERVICE_PORT: 8081
+            HOTEL_SERVICE_HOST: hotel
+            HOTEL_SERVICE_PORT: 8082
+            BOOKING_SERVICE_HOST: booking
+            BOOKING_SERVICE_PORT: 8083
+            PAYMENT_SERVICE_HOST: payment
+            PAYMENT_SERVICE_PORT: 8084
+            LOYALTY_SERVICE_HOST: loyalty
+            LOYALTY_SERVICE_PORT: 8085
+            REPORT_SERVICE_HOST: report
+            REPORT_SERVICE_PORT: 8086
+        # ports:
+        #     - 8087:8087
+        networks:
+            - swarm_network
+        # depends_on:
+        #     db:
+        #         condition: service_healthy
+            
+        #     session:
+        #         condition: service_started
+        #     hotel:
+        #         condition: service_started
+        #     booking:
+        #         condition: service_started
+        #     payment:
+        #         condition: service_started
+        #     loyalty:
+        #         condition: service_started
+        #     report:
+        #         condition: service_started
+        <<: *swarm-deploy
+    hotel:
+        image: flagminn/hotel:latest
+        environment:
+            <<: *pg-db
+            POSTGRES_DB: hotels_db
+        networks:
+            - swarm_network
+        # depends_on:
+        #     db:
+        #         condition: service_healthy
+        <<: *swarm-deploy
+    loyalty:
+        image: flagminn/loyalty:latest
+        environment:
+            <<: *pg-db
+            POSTGRES_DB: balances_db
+        networks:
+            - swarm_network
+        # depends_on:
+        #     db:
+        #         condition: service_healthy
+        <<: *swarm-deploy
+    payment:
+        image: flagminn/payment:latest
+        environment:
+            <<: *pg-db
+            POSTGRES_DB: payments_db
+        networks:
+            - swarm_network
+        # depends_on:
+        #     db:
+        #         condition: service_healthy
+        <<: *swarm-deploy
+    report:
+        image: flagminn/report:latest
+        environment:
+            <<: [*pg-db, *rab]
+            POSTGRES_DB: statistics_db
+        networks:
+            - swarm_network
+        # depends_on:
+        #     db:
+        #         condition: service_healthy
+        #     rabbitmq:
+        #         condition: service_healthy
+        <<: *swarm-deploy
+    session:
+        image: flagminn/session:latest
+        environment:
+            <<: *pg-db
+            POSTGRES_DB: users_db
+        # ports:
+        #     - 8081:8081
+        networks:
+            - swarm_network
+        # depends_on:
+        #     db:
+        #         condition: service_healthy
+        <<: *swarm-deploy
+networks:
+    swarm_network:
+        driver: overlay
+        # attachable: true
+        # ipam:
+        #     driver: default
+        #     config:
+        #         - subnet:
+configs:
+    nginx_config:
+        file: ./nginx/nginx.conf
+    db_config:
+        file: ./services/database/init.sql
+ 
+
+volumes:
+    shop_db:

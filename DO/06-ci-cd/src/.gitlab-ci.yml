@@ -1,0 +1,44 @@
+stages:
+  - build
+  - style
+  - test
+  - deploy
+
+build_job:
+  stage: build
+  script:
+    - cd code-samples/
+    - make
+    - mkdir -p ../src/build
+    - mv DO ../src/build/
+  artifacts:
+    paths:
+      - src/build/DO
+    expire_in: 30 days
+  after_script:
+    - bash src/notify.sh "BUILD (CI)" $CI_JOB_STATUS
+
+style_job:
+  stage: style
+  script:
+    - clang-format -n --Werror code-samples/main.c
+  after_script:
+    - bash src/notify.sh "STYLE (CI)" $CI_JOB_STATUS
+
+test_job:
+  stage: test
+  script:
+    - chmod +x src/build/DO
+    - chmod +x src/test.sh
+    - bash src/test.sh
+  after_script:
+    - bash src/notify.sh "TEST (CI)" $CI_JOB_STATUS
+
+deploy_job:
+  stage: deploy
+  script:
+    - chmod +x src/deploy.sh
+    - bash src/deploy.sh
+  when: manual
+  after_script:
+    - bash src/notify.sh "DEPLOY (CD)" $CI_JOB_STATUS

@@ -1,0 +1,24 @@
+global:
+  resolve_timeout: 5m
+  smtp_smarthost: 'smtp.gmail.com:587'
+  smtp_from: 'aazat.ibragimov@gmail.com'
+  smtp_auth_username: 'aazat.ibragimov@gmail.com'
+  smtp_auth_password: 'kmbbuaijwfmilxjk' 
+  smtp_hello: 'localhost'
+
+route:
+  group_by: ['alertname']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 1h
+  receiver: 'combined-receiver'
+
+receivers:
+  - name: 'combined-receiver'
+    telegram_configs:
+      - bot_token: '8871967033:AAGH5rcEHvz5m8FG0xSlktHdZj_d7jpx4ko'
+        chat_id: 828632783
+        message: "🚨 *Alert:* {{ .CommonLabels.alertname }}\n*Severity:* {{ .CommonLabels.severity }}\n\n{{ .CommonAnnotations.description }}\n"
+    email_configs:
+      - to: 'aazat.ibragimov@gmail.com'
+        send_resolved: true
